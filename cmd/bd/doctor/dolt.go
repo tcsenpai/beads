@@ -39,10 +39,10 @@ func openDoltDB(beadsDir string) (*sql.DB, *configfile.Config, error) {
 
 	var connStr string
 	if password != "" {
-		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&timeout=5s",
+		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&allowNativePasswords=true&timeout=5s",
 			user, password, host, port, database)
 	} else {
-		connStr = fmt.Sprintf("%s@tcp(%s:%d)/%s?parseTime=true&timeout=5s",
+		connStr = fmt.Sprintf("%s@tcp(%s:%d)/%s?parseTime=true&allowNativePasswords=true&timeout=5s",
 			user, host, port, database)
 	}
 

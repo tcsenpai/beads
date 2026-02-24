@@ -564,7 +564,7 @@ func FlushWorkingSet(host string, port int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	dsn := fmt.Sprintf("root@tcp(%s:%d)/?parseTime=true", host, port)
+	dsn := fmt.Sprintf("root@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true", host, port)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return fmt.Errorf("flush: failed to open connection: %w", err)

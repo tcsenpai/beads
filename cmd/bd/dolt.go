@@ -893,10 +893,10 @@ func openDoltServerConnection() (*sql.DB, func()) {
 
 	var connStr string
 	if password != "" {
-		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?parseTime=true&timeout=5s",
+		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&timeout=5s",
 			user, password, host, port)
 	} else {
-		connStr = fmt.Sprintf("%s@tcp(%s:%d)/?parseTime=true&timeout=5s",
+		connStr = fmt.Sprintf("%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&timeout=5s",
 			user, host, port)
 	}
 
