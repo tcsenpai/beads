@@ -321,6 +321,8 @@ environment variable.`,
 						fmt.Fprintf(os.Stderr, "Setup cancelled: %v\n", setupErr)
 						os.Exit(1)
 					}
+					// Save remote config to metadata FIRST (so it persists even if connection fails)
+					saveRemoteConfig(beadsDir, remoteCfg)
 					// Update config with remote server settings
 					doltCfg.ServerHost = remoteCfg.Host
 					doltCfg.ServerPort = remoteCfg.Port
@@ -332,13 +334,11 @@ environment variable.`,
 					store, err = dolt.New(ctx, doltCfg)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "Error: failed to connect to remote server: %v\n", err)
-						fmt.Fprintf(os.Stderr, "\nCheck your settings and try again, or run:\n")
+						fmt.Fprintf(os.Stderr, "\nConfiguration has been saved. To try different settings, run:\n")
 						fmt.Fprintf(os.Stderr, "  bd dolt set host <host>\n")
 						fmt.Fprintf(os.Stderr, "  bd dolt set port <port>\n")
 						os.Exit(1)
 					}
-					// Save remote config to metadata
-					saveRemoteConfig(beadsDir, remoteCfg)
 				default:
 					fmt.Println("Setup cancelled.")
 					os.Exit(1)
