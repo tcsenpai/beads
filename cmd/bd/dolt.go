@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/beads/internal/beads"
 	"github.com/steveyegge/beads/internal/config"
@@ -662,8 +663,9 @@ func setDoltConfig(key, value string, updateConfig bool) {
 
 	switch key {
 	case "mode":
-		fmt.Fprintf(os.Stderr, "Error: mode is no longer configurable; beads always uses server mode\n")
-		os.Exit(1)
+		fmt.Println("Server mode is already enabled (this is the default).")
+		fmt.Println("No configuration needed.")
+		return
 
 	case "database":
 		if value == "" {
@@ -700,7 +702,7 @@ func setDoltConfig(key, value string, updateConfig bool) {
 
 	default:
 		fmt.Fprintf(os.Stderr, "Error: unknown key '%s'\n", key)
-		fmt.Fprintf(os.Stderr, "Valid keys: mode, database, host, port, user\n")
+		fmt.Fprintf(os.Stderr, "Valid keys: database, host, port, user\n")
 		os.Exit(1)
 	}
 
@@ -790,13 +792,32 @@ func testDoltConnection() {
 func testServerConnection(cfg *configfile.Config) bool {
 	host := cfg.GetDoltServerHost()
 	port := cfg.GetDoltServerPort()
+	user := cfg.GetDoltServerUser()
+	password := cfg.GetDoltServerPassword()
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
-	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
+	// Build DSN with auth parameters matching the actual store connection
+	var dsn string
+	if password != "" {
+		dsn = fmt.Sprintf("%s:%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&timeout=5s",
+			user, password, addr)
+	} else {
+		dsn = fmt.Sprintf("%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&timeout=5s",
+			user, addr)
+	}
+
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return false
 	}
-	_ = conn.Close() // Best effort cleanup
+	defer func() { _ = db.Close() }()
+
+	// Test actual MySQL authentication with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		return false
+	}
 	return true
 }
 

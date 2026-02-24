@@ -772,21 +772,30 @@ func KillStaleServers(beadsDir string) ([]int, error) {
 	return killed, nil
 }
 
-// waitForReady polls TCP until the server accepts connections.
+// waitForReady polls until the MySQL server accepts connections.
+// Verifies full MySQL protocol readiness, not just TCP port availability.
 func waitForReady(host string, port int, timeout time.Duration) error {
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
+		// Try a full MySQL connection, not just TCP dial
+		dsn := fmt.Sprintf("root@tcp(%s)/?parseTime=true&allowNativePasswords=true&timeout=2s", addr)
+		db, err := sql.Open("mysql", dsn)
 		if err == nil {
-			_ = conn.Close()
-			return nil
+			// Use a short context for the ping
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			pingErr := db.PingContext(ctx)
+			cancel()
+			_ = db.Close()
+			if pingErr == nil {
+				return nil
+			}
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	return fmt.Errorf("timeout after %s waiting for server at %s", timeout, addr)
+	return fmt.Errorf("timeout after %s waiting for MySQL server at %s", timeout, addr)
 }
 
 // isDoltProcess verifies that a PID belongs to a running dolt sql-server process.
