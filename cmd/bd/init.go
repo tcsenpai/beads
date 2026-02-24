@@ -48,6 +48,7 @@ environment variable.`,
 		stealth, _ := cmd.Flags().GetBool("stealth")
 		skipHooks, _ := cmd.Flags().GetBool("skip-hooks")
 		force, _ := cmd.Flags().GetBool("force")
+		reconfigure, _ := cmd.Flags().GetBool("reconfigure")
 		fromJSONL, _ := cmd.Flags().GetBool("from-jsonl")
 		// Dolt server connection flags
 		_, _ = cmd.Flags().GetBool("server") // no-op, kept for backward compatibility
@@ -62,6 +63,14 @@ environment variable.`,
 		if err := config.Initialize(); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to initialize config: %v\n", err)
 			// Non-fatal - continue with defaults
+		}
+
+		// Handle reconfigure mode - just update server settings and exit
+		if reconfigure {
+			if err := reconfigureDoltServer(serverHost, serverPort, serverUser); err != nil {
+				FatalError("reconfiguration failed: %v", err)
+			}
+			return
 		}
 
 		// Safety guard: check for existing beads data
@@ -716,6 +725,7 @@ func init() {
 	initCmd.Flags().Bool("setup-exclude", false, "Configure .git/info/exclude to keep beads files local (for forks)")
 	initCmd.Flags().Bool("skip-hooks", false, "Skip git hooks installation")
 	initCmd.Flags().Bool("force", false, "Force re-initialization even if database already has issues (may cause data loss)")
+	initCmd.Flags().Bool("reconfigure", false, "Reconfigure Dolt server connection settings (keeps existing issues)")
 	initCmd.Flags().Bool("from-jsonl", false, "Import issues from .beads/issues.jsonl instead of git history")
 	initCmd.Flags().String("agents-template", "", "Path to custom AGENTS.md template (overrides embedded default)")
 
@@ -1146,4 +1156,86 @@ func saveRemoteConfig(beadsDir string, cfg *remoteDoltConfig) {
 		fmt.Println("Note: Password not saved to config file (for security).")
 		fmt.Printf("Set it via environment variable: export BEADS_DOLT_PASSWORD=%s\n", cfg.Password)
 	}
+}
+
+// reconfigureDoltServer updates the Dolt server configuration without reinitializing.
+// Used by 'bd init --reconfigure' to change server settings while preserving data.
+func reconfigureDoltServer(serverHost string, serverPort int, serverUser string) error {
+	beadsDir := beads.FindBeadsDir()
+	if beadsDir == "" {
+		// Not in a beads repo, create one first
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("cannot determine current directory: %w", err)
+		}
+		beadsDir = filepath.Join(cwd, ".beads")
+		if err := os.MkdirAll(beadsDir, 0750); err != nil {
+			return fmt.Errorf("creating .beads directory: %w", err)
+		}
+	}
+
+	// Load existing config or create new one
+	cfg, err := configfile.Load(beadsDir)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	if cfg == nil {
+		cfg = configfile.DefaultConfig()
+	}
+
+	// Interactive prompt if no flags provided
+	if serverHost == "" && serverPort == 0 && serverUser == "" {
+		if !term.IsTerminal(int(os.Stdin.Fd())) {
+			return fmt.Errorf("--reconfigure requires --server-host, --server-port, or --server-user in non-interactive mode")
+		}
+
+		fmt.Println("Reconfigure Dolt Server Connection")
+		fmt.Println("===================================")
+		fmt.Println()
+
+		remoteCfg, err := promptRemoteDoltConfig()
+		if err != nil {
+			return err
+		}
+
+		cfg.DoltServerHost = remoteCfg.Host
+		cfg.DoltServerPort = remoteCfg.Port
+		cfg.DoltServerUser = remoteCfg.User
+		if remoteCfg.Password != "" {
+			// Note: Password not saved, remind user
+			fmt.Println()
+			fmt.Println("Note: Password not saved to config file for security.")
+			fmt.Printf("Set BEADS_DOLT_PASSWORD=%s before running bd commands\n", remoteCfg.Password)
+		}
+	} else {
+		// Use provided flags
+		if serverHost != "" {
+			cfg.DoltServerHost = serverHost
+		}
+		if serverPort != 0 {
+			cfg.DoltServerPort = serverPort
+		}
+		if serverUser != "" {
+			cfg.DoltServerUser = serverUser
+		}
+	}
+
+	// Save config
+	if err := cfg.Save(beadsDir); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✓ Configuration updated successfully!")
+	fmt.Println()
+	fmt.Println("New settings:")
+	fmt.Printf("  Host: %s\n", cfg.DoltServerHost)
+	fmt.Printf("  Port: %d\n", cfg.DoltServerPort)
+	fmt.Printf("  User: %s\n", cfg.DoltServerUser)
+	fmt.Println()
+	fmt.Println("Test the connection:")
+	fmt.Println("  bd dolt test")
+	fmt.Println()
+
+	return nil
 }
