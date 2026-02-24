@@ -536,6 +536,50 @@ Use --dry-run to see what would be dropped without actually dropping.`,
 	},
 }
 
+var doltInstallCmd = &cobra.Command{
+	Use:   "install",
+	Short: "Install Dolt using the official installer",
+	Long: `Install Dolt using the official Dolt install script.
+
+This downloads and installs the latest version of Dolt from the official
+GitHub releases. Requires sudo access unless already running as root.
+
+The install script will:
+  1. Download the latest Dolt release for your platform
+  2. Install it to /usr/local/bin
+  3. Set up proper permissions
+
+After installation, you can run 'bd init' to set up your beads repository.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if doltserver.IsDoltInstalled() {
+			fmt.Println("Dolt is already installed.")
+			fmt.Println()
+			fmt.Println("To check the version:")
+			fmt.Println("  dolt version")
+			fmt.Println()
+			fmt.Println("To initialize a beads repository:")
+			fmt.Println("  bd init")
+			return
+		}
+
+		fmt.Println("Installing Dolt...")
+		fmt.Println("This will download and install Dolt from the official repository.")
+		fmt.Println()
+		
+		if err := doltserver.InstallDolt(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		
+		fmt.Println()
+		fmt.Println("Dolt installed successfully!")
+		fmt.Println()
+		fmt.Println("Next steps:")
+		fmt.Println("  1. Run 'dolt version' to verify the installation")
+		fmt.Println("  2. Run 'bd init' to initialize your beads repository")
+	},
+}
+
 // isTimeoutError checks if an error is a context deadline exceeded or timeout.
 func isTimeoutError(err error) bool {
 	if err == nil {
@@ -572,6 +616,7 @@ func init() {
 	doltCmd.AddCommand(doltIdleMonitorCmd)
 	doltCmd.AddCommand(doltKillallCmd)
 	doltCmd.AddCommand(doltCleanDatabasesCmd)
+	doltCmd.AddCommand(doltInstallCmd)
 	rootCmd.AddCommand(doltCmd)
 }
 

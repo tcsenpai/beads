@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/steveyegge/beads/internal/beads"
 	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/configfile"
+	"github.com/steveyegge/beads/internal/doltserver"
 	"github.com/steveyegge/beads/internal/git"
 	"github.com/steveyegge/beads/internal/storage/dolt"
 	"github.com/steveyegge/beads/internal/ui"
@@ -282,8 +284,69 @@ environment variable.`,
 		var store *dolt.DoltStore
 		store, err = dolt.New(ctx, doltCfg)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to connect to dolt server: %v\n", err)
-			os.Exit(1)
+			// Check if this is a "dolt not installed" error
+			if isDoltNotInstalledError(err) && term.IsTerminal(int(os.Stdin.Fd())) {
+				// Offer interactive options
+				fmt.Println()
+				fmt.Println("Dolt is not installed or not in PATH.")
+				fmt.Println()
+				fmt.Println("Options:")
+				fmt.Println("  [1] Install Dolt locally (requires sudo)")
+				fmt.Println("  [2] Use a remote Dolt server")
+				fmt.Println("  [3] Cancel and exit")
+				fmt.Println()
+				fmt.Print("Select option [1-3]: ")
+				
+				reader := bufio.NewReader(os.Stdin)
+				choice, _ := reader.ReadString('\n')
+				choice = strings.TrimSpace(choice)
+				
+				switch choice {
+				case "1":
+					fmt.Println()
+					if installErr := installDoltInteractive(); installErr != nil {
+						fmt.Fprintf(os.Stderr, "Installation failed: %v\n", installErr)
+						os.Exit(1)
+					}
+					// Retry connection after installation
+					store, err = dolt.New(ctx, doltCfg)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Error: still failed to connect after installation: %v\n", err)
+						os.Exit(1)
+					}
+				case "2":
+					// Prompt for remote server configuration
+					remoteCfg, setupErr := promptRemoteDoltConfig()
+					if setupErr != nil {
+						fmt.Fprintf(os.Stderr, "Setup cancelled: %v\n", setupErr)
+						os.Exit(1)
+					}
+					// Update config with remote server settings
+					doltCfg.ServerHost = remoteCfg.Host
+					doltCfg.ServerPort = remoteCfg.Port
+					doltCfg.ServerUser = remoteCfg.User
+					if remoteCfg.Password != "" {
+						doltCfg.ServerPassword = remoteCfg.Password
+					}
+					// Retry connection with remote config
+					store, err = dolt.New(ctx, doltCfg)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Error: failed to connect to remote server: %v\n", err)
+						fmt.Fprintf(os.Stderr, "\nCheck your settings and try again, or run:\n")
+						fmt.Fprintf(os.Stderr, "  bd dolt set host <host>\n")
+						fmt.Fprintf(os.Stderr, "  bd dolt set port <port>\n")
+						os.Exit(1)
+					}
+					// Save remote config to metadata
+					saveRemoteConfig(beadsDir, remoteCfg)
+				default:
+					fmt.Println("Setup cancelled.")
+					os.Exit(1)
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: failed to connect to dolt server: %v\n", err)
+				os.Exit(1)
+			}
 		}
 
 		// === CONFIGURATION METADATA (Pattern A: Fatal) ===
@@ -946,4 +1009,135 @@ func verifyMetadata(ctx context.Context, store *dolt.DoltStore, key, value strin
 		return false
 	}
 	return true
+}
+
+// isDoltNotInstalledError checks if an error indicates that dolt is not installed.
+func isDoltNotInstalledError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "dolt is not installed") ||
+		strings.Contains(errStr, "not found in path") ||
+		strings.Contains(errStr, "executable file not found")
+}
+
+// installDoltInteractive installs dolt with user confirmation.
+func installDoltInteractive() error {
+	fmt.Println("This will install Dolt using the official install script.")
+	fmt.Println("Command: curl -fsSL https://github.com/dolthub/dolt/releases/latest/download/install.sh | sudo bash")
+	fmt.Println()
+	fmt.Print("Continue? [Y/n]: ")
+	
+	reader := bufio.NewReader(os.Stdin)
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(strings.ToLower(response))
+	
+	if response == "n" || response == "no" {
+		return fmt.Errorf("installation cancelled by user")
+	}
+	
+	fmt.Println()
+	return doltserver.InstallDolt()
+}
+
+// remoteDoltConfig holds remote server configuration.
+type remoteDoltConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+}
+
+// promptRemoteDoltConfig interactively prompts for remote Dolt server configuration.
+func promptRemoteDoltConfig() (*remoteDoltConfig, error) {
+	reader := bufio.NewReader(os.Stdin)
+	cfg := &remoteDoltConfig{}
+	
+	fmt.Println()
+	fmt.Println("Remote Dolt Server Configuration")
+	fmt.Println("================================")
+	fmt.Println()
+	
+	// Host
+	fmt.Print("Server host [127.0.0.1]: ")
+	host, _ := reader.ReadString('\n')
+	host = strings.TrimSpace(host)
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	cfg.Host = host
+	
+	// Port
+	fmt.Print("Server port [3307]: ")
+	portStr, _ := reader.ReadString('\n')
+	portStr = strings.TrimSpace(portStr)
+	if portStr == "" {
+		cfg.Port = 3307
+	} else {
+		port, err := strconv.Atoi(portStr)
+		if err != nil || port <= 0 || port > 65535 {
+			return nil, fmt.Errorf("invalid port number: %s", portStr)
+		}
+		cfg.Port = port
+	}
+	
+	// User
+	fmt.Print("MySQL user [root]: ")
+	user, _ := reader.ReadString('\n')
+	user = strings.TrimSpace(user)
+	if user == "" {
+		user = "root"
+	}
+	cfg.User = user
+	
+	// Password
+	fmt.Print("MySQL password (optional): ")
+	password, _ := reader.ReadString('\n')
+	cfg.Password = strings.TrimSpace(password)
+	
+	fmt.Println()
+	fmt.Printf("Configuration:\n")
+	fmt.Printf("  Host: %s\n", cfg.Host)
+	fmt.Printf("  Port: %d\n", cfg.Port)
+	fmt.Printf("  User: %s\n", cfg.User)
+	if cfg.Password != "" {
+		fmt.Printf("  Password: ********\n")
+	}
+	fmt.Println()
+	fmt.Print("Save this configuration? [Y/n]: ")
+	
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(strings.ToLower(response))
+	
+	if response == "n" || response == "no" {
+		return nil, fmt.Errorf("configuration cancelled")
+	}
+	
+	return cfg, nil
+}
+
+// saveRemoteConfig saves the remote server configuration to metadata.json.
+func saveRemoteConfig(beadsDir string, cfg *remoteDoltConfig) {
+	metaCfg, err := configfile.Load(beadsDir)
+	if err != nil || metaCfg == nil {
+		metaCfg = configfile.DefaultConfig()
+	}
+	
+	metaCfg.DoltServerHost = cfg.Host
+	metaCfg.DoltServerPort = cfg.Port
+	metaCfg.DoltServerUser = cfg.User
+	
+	if err := metaCfg.Save(beadsDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save remote config: %v\n", err)
+	} else {
+		fmt.Printf("Remote server configuration saved to %s\n", filepath.Join(beadsDir, "metadata.json"))
+	}
+	
+	// If password was set, remind user about env var
+	if cfg.Password != "" {
+		fmt.Println()
+		fmt.Println("Note: Password not saved to config file (for security).")
+		fmt.Printf("Set it via environment variable: export BEADS_DOLT_PASSWORD=%s\n", cfg.Password)
+	}
 }

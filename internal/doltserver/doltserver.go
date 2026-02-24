@@ -445,7 +445,7 @@ func Start(beadsDir string) (*State, error) {
 	// Ensure dolt binary exists
 	doltBin, err := exec.LookPath("dolt")
 	if err != nil {
-		return nil, fmt.Errorf("dolt is not installed (not found in PATH)\n\nInstall from: https://docs.dolthub.com/introduction/installation")
+		return nil, fmt.Errorf("dolt is not installed (not found in PATH)\n\nOptions:\n  1. Auto-install: bd dolt install\n  2. Manual install: https://docs.dolthub.com/introduction/installation\n  3. Use remote server: bd dolt set host <host> --update-config")
 	}
 
 	// Ensure dolt identity is configured
@@ -875,6 +875,38 @@ func ensureDoltInit(doltDir string) error {
 		return fmt.Errorf("dolt init: %w\n%s", err, out)
 	}
 
+	return nil
+}
+
+// IsDoltInstalled checks if the dolt binary is available in PATH.
+func IsDoltInstalled() bool {
+	_, err := exec.LookPath("dolt")
+	return err == nil
+}
+
+// InstallDolt installs dolt using the official install script.
+// Returns an error if installation fails.
+func InstallDolt() error {
+	// Check if we have sudo access or are root
+	isRoot := os.Getuid() == 0
+	
+	var cmd *exec.Cmd
+	if isRoot {
+		// Direct installation as root
+		cmd = exec.Command("bash", "-c", "curl -fsSL https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash")
+	} else {
+		// Try with sudo
+		cmd = exec.Command("sudo", "bash", "-c", "curl -fsSL https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash")
+	}
+	
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("dolt installation failed: %w\n\nTry installing manually from: https://docs.dolthub.com/introduction/installation", err)
+	}
+	
 	return nil
 }
 
