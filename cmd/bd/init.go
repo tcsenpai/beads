@@ -49,6 +49,7 @@ environment variable.`,
 		skipHooks, _ := cmd.Flags().GetBool("skip-hooks")
 		force, _ := cmd.Flags().GetBool("force")
 		reconfigure, _ := cmd.Flags().GetBool("reconfigure")
+		local, _ := cmd.Flags().GetBool("local")
 		fromJSONL, _ := cmd.Flags().GetBool("from-jsonl")
 		// Dolt server connection flags
 		_, _ = cmd.Flags().GetBool("server") // no-op, kept for backward compatibility
@@ -69,6 +70,14 @@ environment variable.`,
 		if reconfigure {
 			if err := reconfigureDoltServer(serverHost, serverPort, serverUser); err != nil {
 				FatalError("reconfiguration failed: %v", err)
+			}
+			return
+		}
+
+		// Handle local mode - reset to local Dolt server
+		if local {
+			if err := resetToLocalServer(); err != nil {
+				FatalError("failed to reset to local server: %v", err)
 			}
 			return
 		}
@@ -726,6 +735,7 @@ func init() {
 	initCmd.Flags().Bool("skip-hooks", false, "Skip git hooks installation")
 	initCmd.Flags().Bool("force", false, "Force re-initialization even if database already has issues (may cause data loss)")
 	initCmd.Flags().Bool("reconfigure", false, "Reconfigure Dolt server connection settings (keeps existing issues)")
+	initCmd.Flags().Bool("local", false, "Reset to local Dolt server (127.0.0.1:3307) - useful when remote fails")
 	initCmd.Flags().Bool("from-jsonl", false, "Import issues from .beads/issues.jsonl instead of git history")
 	initCmd.Flags().String("agents-template", "", "Path to custom AGENTS.md template (overrides embedded default)")
 
@@ -1235,6 +1245,45 @@ func reconfigureDoltServer(serverHost string, serverPort int, serverUser string)
 	fmt.Println()
 	fmt.Println("Test the connection:")
 	fmt.Println("  bd dolt test")
+	fmt.Println()
+
+	return nil
+}
+
+// resetToLocalServer resets the configuration to use local Dolt server.
+func resetToLocalServer() error {
+	beadsDir := beads.FindBeadsDir()
+	if beadsDir == "" {
+		return fmt.Errorf("not in a beads repository (no .beads directory found)")
+	}
+
+	cfg, err := configfile.Load(beadsDir)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	if cfg == nil {
+		cfg = configfile.DefaultConfig()
+	}
+
+	// Reset to local defaults
+	cfg.DoltServerHost = "127.0.0.1"
+	cfg.DoltServerPort = 3307
+	cfg.DoltServerUser = "root"
+
+	if err := cfg.Save(beadsDir); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	fmt.Println("✓ Reset to local Dolt server configuration")
+	fmt.Println()
+	fmt.Println("Settings:")
+	fmt.Printf("  Host: %s\n", cfg.DoltServerHost)
+	fmt.Printf("  Port: %d\n", cfg.DoltServerPort)
+	fmt.Printf("  User: %s\n", cfg.DoltServerUser)
+	fmt.Println()
+	fmt.Println("Next steps:")
+	fmt.Println("  1. Start local Dolt server: bd dolt start")
+	fmt.Println("  2. Test connection: bd dolt test")
 	fmt.Println()
 
 	return nil
