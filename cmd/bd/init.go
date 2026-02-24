@@ -334,7 +334,13 @@ environment variable.`,
 					store, err = dolt.New(ctx, doltCfg)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "Error: failed to connect to remote server: %v\n", err)
-						fmt.Fprintf(os.Stderr, "\nConfiguration has been saved. To try different settings, run:\n")
+						fmt.Fprintf(os.Stderr, "\nConfiguration has been saved to .beads/metadata.json\n")
+						fmt.Fprintf(os.Stderr, "\nTroubleshooting tips:\n")
+						fmt.Fprintf(os.Stderr, "  - Verify the Dolt server is running: dolt sql-server on the remote host\n")
+						fmt.Fprintf(os.Stderr, "  - Check if password is required and set BEADS_DOLT_PASSWORD env var\n")
+						fmt.Fprintf(os.Stderr, "  - Test connection manually: mysql -h %s -P %d -u %s\n",
+							remoteCfg.Host, remoteCfg.Port, remoteCfg.User)
+						fmt.Fprintf(os.Stderr, "\nTo modify settings, run:\n")
 						fmt.Fprintf(os.Stderr, "  bd dolt set host <host>\n")
 						fmt.Fprintf(os.Stderr, "  bd dolt set port <port>\n")
 						os.Exit(1)

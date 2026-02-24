@@ -571,7 +571,7 @@ func buildServerDSN(cfg *Config, database string) string {
 		dbPart = "/"
 	}
 
-	params := "parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true"
+	params := "parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred"
 	if cfg.ServerTLS {
 		params += "&tls=true"
 	}

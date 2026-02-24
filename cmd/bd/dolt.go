@@ -844,10 +844,10 @@ func testServerConnection(cfg *configfile.Config) bool {
 	// Build DSN with auth parameters matching the actual store connection
 	var dsn string
 	if password != "" {
-		dsn = fmt.Sprintf("%s:%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&timeout=5s",
+		dsn = fmt.Sprintf("%s:%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred&timeout=5s",
 			user, password, addr)
 	} else {
-		dsn = fmt.Sprintf("%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&timeout=5s",
+		dsn = fmt.Sprintf("%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred&timeout=5s",
 			user, addr)
 	}
 
@@ -893,10 +893,10 @@ func openDoltServerConnection() (*sql.DB, func()) {
 
 	var connStr string
 	if password != "" {
-		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&timeout=5s",
+		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred&timeout=5s",
 			user, password, host, port)
 	} else {
-		connStr = fmt.Sprintf("%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&timeout=5s",
+		connStr = fmt.Sprintf("%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred&timeout=5s",
 			user, host, port)
 	}
 
