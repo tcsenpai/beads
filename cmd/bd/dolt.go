@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -335,6 +336,74 @@ Displays whether the server is running, its PID, port, and data directory.`,
 	},
 }
 
+var doltLogsCmd = &cobra.Command{
+	Use:   "logs",
+	Short: "Show Dolt server logs",
+	Long: `Display the logs from the dolt sql-server for the current project.
+
+Useful for debugging server startup failures, connection issues, or
+authentication problems.
+
+Examples:
+  bd dolt logs              # Show all logs
+  bd dolt logs --tail 50    # Show last 50 lines
+  bd dolt logs --follow     # Follow log output (like tail -f)`,
+	Run: func(cmd *cobra.Command, args []string) {
+		beadsDir := beads.FindBeadsDir()
+		if beadsDir == "" {
+			fmt.Fprintf(os.Stderr, "Error: not in a beads repository (no .beads directory found)\n")
+			os.Exit(1)
+		}
+		serverDir := doltserver.ResolveServerDir(beadsDir)
+		logPath := doltserver.LogPath(serverDir)
+
+		tailLines, _ := cmd.Flags().GetInt("tail")
+		follow, _ := cmd.Flags().GetBool("follow")
+
+		// Check if log file exists
+		if _, err := os.Stat(logPath); os.IsNotExist(err) {
+			fmt.Println("No log file found. The server may not have been started yet.")
+			fmt.Printf("Expected log path: %s\n", logPath)
+			fmt.Println("\nStart the server with: bd dolt start")
+			return
+		}
+
+		if follow {
+			// Use tail -f equivalent
+			tailCmd := exec.Command("tail", "-f", logPath)
+			tailCmd.Stdout = os.Stdout
+			tailCmd.Stderr = os.Stderr
+			if err := tailCmd.Run(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error following logs: %v\n", err)
+				os.Exit(1)
+			}
+		} else if tailLines > 0 {
+			// Show last N lines
+			data, err := os.ReadFile(logPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading logs: %v\n", err)
+				os.Exit(1)
+			}
+			lines := strings.Split(string(data), "\n")
+			start := len(lines) - tailLines
+			if start < 0 {
+				start = 0
+			}
+			for _, line := range lines[start:] {
+				fmt.Println(line)
+			}
+		} else {
+			// Show all logs
+			data, err := os.ReadFile(logPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading logs: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Print(string(data))
+		}
+	},
+}
+
 var doltIdleMonitorCmd = &cobra.Command{
 	Use:    "idle-monitor",
 	Short:  "Run idle monitor (internal, not for direct use)",
@@ -604,6 +673,8 @@ func init() {
 	doltCommitCmd.Flags().StringP("message", "m", "", "Commit message (default: auto-generated)")
 	doltIdleMonitorCmd.Flags().String("beads-dir", "", "Path to .beads directory")
 	doltCleanDatabasesCmd.Flags().Bool("dry-run", false, "Show what would be dropped without dropping")
+	doltLogsCmd.Flags().IntP("tail", "n", 0, "Show last N lines of logs")
+	doltLogsCmd.Flags().BoolP("follow", "f", false, "Follow log output (like tail -f)")
 	doltCmd.AddCommand(doltShowCmd)
 	doltCmd.AddCommand(doltSetCmd)
 	doltCmd.AddCommand(doltTestCmd)
@@ -613,6 +684,7 @@ func init() {
 	doltCmd.AddCommand(doltStartCmd)
 	doltCmd.AddCommand(doltStopCmd)
 	doltCmd.AddCommand(doltStatusCmd)
+	doltCmd.AddCommand(doltLogsCmd)
 	doltCmd.AddCommand(doltIdleMonitorCmd)
 	doltCmd.AddCommand(doltKillallCmd)
 	doltCmd.AddCommand(doltCleanDatabasesCmd)

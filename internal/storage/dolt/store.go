@@ -469,9 +469,14 @@ func newServerMode(ctx context.Context, cfg *Config) (*DoltStore, error) {
 			port, startErr := doltserver.EnsureRunning(beadsDir)
 			if startErr != nil {
 				return nil, fmt.Errorf("Dolt server unreachable at %s and auto-start failed: %w\n\n"+
+					"Common causes:\n"+
+					"  - Dolt is not installed: bd dolt install\n"+
+					"  - Port %d is in use by another process\n"+
+					"  - Permission denied starting dolt sql-server\n\n"+
 					"To start manually: bd dolt start\n"+
+					"To check status: bd dolt status\n"+
 					"To disable auto-start: set dolt.auto-start: false in .beads/config.yaml",
-					addr, startErr)
+					addr, startErr, cfg.ServerPort)
 			}
 			// Update port in case EnsureRunning used a derived port
 			if port != cfg.ServerPort {
