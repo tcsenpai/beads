@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
@@ -255,4 +256,95 @@ func TestApplyConfigDefaults_ProductionFallback(t *testing.T) {
 	if cfg.ServerPort != DefaultSQLPort {
 		t.Errorf("expected ServerPort=%d (DefaultSQLPort), got %d", DefaultSQLPort, cfg.ServerPort)
 	}
+}
+
+// TestBuildServerDSN verifies that buildServerDSN produces well-formed DSN strings
+// and that the tls=preferred / tls=true selection is mutually exclusive (no duplicates).
+func TestBuildServerDSN(t *testing.T) {
+	base := &Config{
+		ServerHost: "127.0.0.1",
+		ServerPort: 3307,
+		ServerUser: "root",
+	}
+
+	t.Run("no password no tls flag uses tls=preferred", func(t *testing.T) {
+		cfg := *base
+		dsn := buildServerDSN(&cfg, "beads")
+		if !strings.Contains(dsn, "tls=preferred") {
+			t.Errorf("expected tls=preferred in DSN, got: %s", dsn)
+		}
+		if strings.Contains(dsn, "tls=true") {
+			t.Errorf("tls=true must not appear when ServerTLS=false, got: %s", dsn)
+		}
+	})
+
+	t.Run("tls flag replaces preferred with true", func(t *testing.T) {
+		cfg := *base
+		cfg.ServerTLS = true
+		dsn := buildServerDSN(&cfg, "beads")
+		if !strings.Contains(dsn, "tls=true") {
+			t.Errorf("expected tls=true in DSN, got: %s", dsn)
+		}
+		if strings.Contains(dsn, "tls=preferred") {
+			t.Errorf("tls=preferred must not appear when ServerTLS=true, got: %s", dsn)
+		}
+	})
+
+	t.Run("no duplicate tls parameters", func(t *testing.T) {
+		for _, serverTLS := range []bool{false, true} {
+			cfg := *base
+			cfg.ServerTLS = serverTLS
+			dsn := buildServerDSN(&cfg, "beads")
+			count := strings.Count(dsn, "tls=")
+			if count != 1 {
+				t.Errorf("ServerTLS=%v: expected exactly 1 tls= param, found %d in: %s", serverTLS, count, dsn)
+			}
+		}
+	})
+
+	t.Run("password included in DSN when set", func(t *testing.T) {
+		cfg := *base
+		cfg.ServerPassword = "s3cr3t"
+		dsn := buildServerDSN(&cfg, "beads")
+		if !strings.Contains(dsn, "root:s3cr3t@") {
+			t.Errorf("expected user:password@ in DSN, got: %s", dsn)
+		}
+	})
+
+	t.Run("no password means user-only auth", func(t *testing.T) {
+		cfg := *base
+		dsn := buildServerDSN(&cfg, "beads")
+		if !strings.Contains(dsn, "root@") {
+			t.Errorf("expected user@ (no password) in DSN, got: %s", dsn)
+		}
+	})
+
+	t.Run("empty database connects without db selector", func(t *testing.T) {
+		cfg := *base
+		dsn := buildServerDSN(&cfg, "")
+		if !strings.Contains(dsn, "tcp(127.0.0.1:3307)/") {
+			t.Errorf("expected no db name when empty, got: %s", dsn)
+		}
+		// Must not have a double slash or a db name after the slash.
+		if strings.Contains(dsn, "//") {
+			t.Errorf("unexpected double slash in DSN: %s", dsn)
+		}
+	})
+
+	t.Run("allowNativePasswords present", func(t *testing.T) {
+		cfg := *base
+		dsn := buildServerDSN(&cfg, "beads")
+		if !strings.Contains(dsn, "allowNativePasswords=true") {
+			t.Errorf("expected allowNativePasswords=true in DSN, got: %s", dsn)
+		}
+	})
+
+	t.Run("allowCleartextPasswords absent", func(t *testing.T) {
+		cfg := *base
+		cfg.ServerTLS = true
+		dsn := buildServerDSN(&cfg, "beads")
+		if strings.Contains(dsn, "allowCleartextPasswords") {
+			t.Errorf("allowCleartextPasswords must not appear in any DSN, got: %s", dsn)
+		}
+	})
 }

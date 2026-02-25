@@ -1180,15 +1180,7 @@ func saveRemoteConfig(beadsDir string, cfg *remoteDoltConfig) {
 func reconfigureDoltServer(serverHost string, serverPort int, serverUser string) error {
 	beadsDir := beads.FindBeadsDir()
 	if beadsDir == "" {
-		// Not in a beads repo, create one first
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("cannot determine current directory: %w", err)
-		}
-		beadsDir = filepath.Join(cwd, ".beads")
-		if err := os.MkdirAll(beadsDir, 0750); err != nil {
-			return fmt.Errorf("creating .beads directory: %w", err)
-		}
+		return fmt.Errorf("not in a beads repository (no .beads directory found)\n\nRun 'bd init' first to create a repository")
 	}
 
 	// Load existing config or create new one
@@ -1219,10 +1211,10 @@ func reconfigureDoltServer(serverHost string, serverPort int, serverUser string)
 		cfg.DoltServerPort = remoteCfg.Port
 		cfg.DoltServerUser = remoteCfg.User
 		if remoteCfg.Password != "" {
-			// Note: Password not saved, remind user
+			// Note: Password not saved, remind user (do not print the value)
 			fmt.Println()
 			fmt.Println("Note: Password not saved to config file for security.")
-			fmt.Printf("Set BEADS_DOLT_PASSWORD=%s before running bd commands\n", remoteCfg.Password)
+			fmt.Println("Set BEADS_DOLT_PASSWORD=<your-password> before running bd commands.")
 		}
 	} else {
 		// Use provided flags

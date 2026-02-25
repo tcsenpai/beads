@@ -40,6 +40,13 @@ const (
 	portRangeSize = 1000
 )
 
+// doltDSNParams is the common MySQL DSN parameter string used for all Dolt
+// server connections in this package. allowNativePasswords enables Dolt's
+// MySQL-compatible password hashing; tls=preferred attempts TLS but falls back
+// to unencrypted for local connections (localhost only; remote connections
+// should use tls=true via the store layer's buildServerDSN).
+const doltDSNParams = "parseTime=true&allowNativePasswords=true&tls=preferred"
+
 // GasTownPort is the fixed port used when running under Gas Town (GT_ROOT set).
 // All worktrees share this single server instead of each getting a derived port.
 const GasTownPort = 3307
@@ -564,7 +571,7 @@ func FlushWorkingSet(host string, port int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	dsn := fmt.Sprintf("root@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&tls=preferred", host, port)
+	dsn := fmt.Sprintf("root@tcp(%s:%d)/?%s", host, port, doltDSNParams)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return fmt.Errorf("flush: failed to open connection: %w", err)
@@ -780,7 +787,7 @@ func waitForReady(host string, port int, timeout time.Duration) error {
 
 	for time.Now().Before(deadline) {
 		// Try a full MySQL connection, not just TCP dial
-		dsn := fmt.Sprintf("root@tcp(%s)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=2s", addr)
+		dsn := fmt.Sprintf("root@tcp(%s)/?%s&timeout=2s", addr, doltDSNParams)
 		db, err := sql.Open("mysql", dsn)
 		if err == nil {
 			// Use a short context for the ping

@@ -276,11 +276,9 @@ func checkDoltVersion(cfg *configfile.Config) (DoctorCheck, *sql.DB) {
 	// Build DSN without database (just to test server connectivity)
 	var connStr string
 	if password != "" {
-		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
-			user, password, host, port)
+		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?%s&timeout=5s", user, password, host, port, doltDSNParams)
 	} else {
-		connStr = fmt.Sprintf("%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
-			user, host, port)
+		connStr = fmt.Sprintf("%s@tcp(%s:%d)/?%s&timeout=5s", user, host, port, doltDSNParams)
 	}
 
 	db, err := sql.Open("mysql", connStr)

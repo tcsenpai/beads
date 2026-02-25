@@ -17,6 +17,10 @@ import (
 	"github.com/steveyegge/beads/internal/storage/dolt"
 )
 
+// doltDSNParams is the common MySQL DSN parameter string for Dolt connections
+// in the doctor package. Kept in sync with doltserver.doltDSNParams.
+const doltDSNParams = "parseTime=true&allowNativePasswords=true&tls=preferred"
+
 // openDoltDB opens a connection to the Dolt SQL server via MySQL protocol.
 func openDoltDB(beadsDir string) (*sql.DB, *configfile.Config, error) {
 	cfg, err := configfile.Load(beadsDir)
@@ -39,11 +43,9 @@ func openDoltDB(beadsDir string) (*sql.DB, *configfile.Config, error) {
 
 	var connStr string
 	if password != "" {
-		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
-			user, password, host, port, database)
+		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s&timeout=5s", user, password, host, port, database, doltDSNParams)
 	} else {
-		connStr = fmt.Sprintf("%s@tcp(%s:%d)/%s?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
-			user, host, port, database)
+		connStr = fmt.Sprintf("%s@tcp(%s:%d)/%s?%s&timeout=5s", user, host, port, database, doltDSNParams)
 	}
 
 	db, err := sql.Open("mysql", connStr)

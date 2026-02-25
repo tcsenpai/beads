@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -753,4 +754,117 @@ func containsAny(s string, substrs ...string) bool {
 		}
 	}
 	return false
+}
+
+// TestIsDoltNotInstalledError verifies detection of "dolt not installed" errors
+// by string matching, covering all known message variants.
+func TestIsDoltNotInstalledError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil error", nil, false},
+		{"dolt is not installed", fmt.Errorf("dolt is not installed"), true},
+		{"uppercase variant", fmt.Errorf("Dolt is not installed on this system"), true},
+		{"not found in path", fmt.Errorf("not found in path"), true},
+		{"executable file not found", fmt.Errorf("executable file not found in $PATH"), true},
+		{"unrelated error", fmt.Errorf("connection refused"), false},
+		{"timeout error", fmt.Errorf("i/o timeout"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isDoltNotInstalledError(tt.err)
+			if got != tt.want {
+				t.Errorf("isDoltNotInstalledError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestResetToLocalServer_RequiresBeadsDir verifies that resetToLocalServer
+// returns an error when not inside a beads repository.
+func TestResetToLocalServer_RequiresBeadsDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldCwd, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldCwd) }()
+
+	err := resetToLocalServer()
+	if err == nil {
+		t.Fatal("expected error when no .beads directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "not in a beads repository") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// TestResetToLocalServer_ResetsToDefaults verifies that resetToLocalServer writes
+// the standard local server values (127.0.0.1:3307/root) to the config.
+func TestResetToLocalServer_ResetsToDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	beadsDir := filepath.Join(tmpDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0755); err != nil {
+		t.Fatalf("failed to create .beads: %v", err)
+	}
+
+	// Write an initial config with non-default remote settings.
+	cfg := configfile.DefaultConfig()
+	cfg.Backend = configfile.BackendDolt
+	cfg.DoltServerHost = "remote.example.com"
+	cfg.DoltServerPort = 5555
+	cfg.DoltServerUser = "alice"
+	if err := cfg.Save(beadsDir); err != nil {
+		t.Fatalf("failed to save initial config: %v", err)
+	}
+
+	oldCwd, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldCwd) }()
+
+	if err := resetToLocalServer(); err != nil {
+		t.Fatalf("resetToLocalServer returned error: %v", err)
+	}
+
+	loaded, err := configfile.Load(beadsDir)
+	if err != nil {
+		t.Fatalf("failed to load saved config: %v", err)
+	}
+	if loaded.DoltServerHost != "127.0.0.1" {
+		t.Errorf("host = %q, want 127.0.0.1", loaded.DoltServerHost)
+	}
+	if loaded.DoltServerPort != 3307 {
+		t.Errorf("port = %d, want 3307", loaded.DoltServerPort)
+	}
+	if loaded.DoltServerUser != "root" {
+		t.Errorf("user = %q, want root", loaded.DoltServerUser)
+	}
+}
+
+// TestReconfigureDoltServer_RequiresBeadsDir verifies that reconfigureDoltServer
+// returns an error when not inside a beads repository (not silently creating one).
+func TestReconfigureDoltServer_RequiresBeadsDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldCwd, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldCwd) }()
+
+	err := reconfigureDoltServer("somehost", 1234, "user")
+	if err == nil {
+		t.Fatal("expected error when no .beads directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "not in a beads repository") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+	// Must NOT have created a .beads directory.
+	if _, statErr := os.Stat(filepath.Join(tmpDir, ".beads")); !os.IsNotExist(statErr) {
+		t.Error("reconfigureDoltServer must not create .beads when no repo exists")
+	}
 }

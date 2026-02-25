@@ -25,6 +25,10 @@ import (
 	"github.com/steveyegge/beads/internal/ui"
 )
 
+// doltDSNParams is the common MySQL DSN parameter string used for direct Dolt
+// server connections in the bd CLI. Kept in sync with doltserver.doltDSNParams.
+const doltDSNParams = "parseTime=true&allowNativePasswords=true&tls=preferred"
+
 var doltCmd = &cobra.Command{
 	Use:     "dolt",
 	GroupID: "setup",
@@ -933,11 +937,9 @@ func testServerConnection(cfg *configfile.Config) bool {
 	// Build DSN with auth parameters matching the actual store connection
 	var dsn string
 	if password != "" {
-		dsn = fmt.Sprintf("%s:%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
-			user, password, addr)
+		dsn = fmt.Sprintf("%s:%s@tcp(%s)/?%s&timeout=5s", user, password, addr, doltDSNParams)
 	} else {
-		dsn = fmt.Sprintf("%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
-			user, addr)
+		dsn = fmt.Sprintf("%s@tcp(%s)/?%s&timeout=5s", user, addr, doltDSNParams)
 	}
 
 	db, err := sql.Open("mysql", dsn)
@@ -982,11 +984,9 @@ func openDoltServerConnection() (*sql.DB, func()) {
 
 	var connStr string
 	if password != "" {
-		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
-			user, password, host, port)
+		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?%s&timeout=5s", user, password, host, port, doltDSNParams)
 	} else {
-		connStr = fmt.Sprintf("%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
-			user, host, port)
+		connStr = fmt.Sprintf("%s@tcp(%s:%d)/?%s&timeout=5s", user, host, port, doltDSNParams)
 	}
 
 	db, err := sql.Open("mysql", connStr)

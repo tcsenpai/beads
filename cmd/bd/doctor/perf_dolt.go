@@ -101,7 +101,7 @@ func runDoltServerDiagnostics(metrics *DoltPerfMetrics, host string, port int, d
 	metrics.Backend = "dolt-server"
 	metrics.ServerMode = true
 
-	dsn := fmt.Sprintf("root:@tcp(%s:%d)/%s?parseTime=true&allowNativePasswords=true&tls=preferred", host, port, dbName)
+	dsn := fmt.Sprintf("root:@tcp(%s:%d)/%s?%s", host, port, dbName, doltDSNParams)
 
 	// Measure connection time
 	start := time.Now()
