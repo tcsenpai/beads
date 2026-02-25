@@ -123,6 +123,3 @@ bd_test
 
 # Dolt database files (added by bd init)
 .dolt/
-/.beads
-/AGENTS.md
-/issue.txt
