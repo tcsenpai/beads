@@ -468,15 +468,16 @@ func newServerMode(ctx context.Context, cfg *Config) (*DoltStore, error) {
 			beadsDir := filepath.Dir(cfg.Path) // cfg.Path is .beads/dolt → parent is .beads/
 			port, startErr := doltserver.EnsureRunning(beadsDir)
 			if startErr != nil {
-				return nil, fmt.Errorf("Dolt server unreachable at %s and auto-start failed: %w\n\n"+
+				return nil, fmt.Errorf("Dolt server unreachable at %s and auto-start failed\n\n"+
 					"Common causes:\n"+
 					"  - Dolt is not installed: bd dolt install\n"+
 					"  - Port %d is in use by another process\n"+
 					"  - Permission denied starting dolt sql-server\n\n"+
 					"To start manually: bd dolt start\n"+
 					"To check status: bd dolt status\n"+
-					"To disable auto-start: set dolt.auto-start: false in .beads/config.yaml",
-					addr, startErr, cfg.ServerPort)
+					"To disable auto-start: set dolt.auto-start: false in .beads/config.yaml\n\n"+
+					"Error: %w",
+					addr, cfg.ServerPort, startErr)
 			}
 			// Update port in case EnsureRunning used a derived port
 			if port != cfg.ServerPort {
@@ -576,10 +577,11 @@ func buildServerDSN(cfg *Config, database string) string {
 		dbPart = "/"
 	}
 
-	params := "parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred"
+	tlsParam := "tls=preferred"
 	if cfg.ServerTLS {
-		params += "&tls=true"
+		tlsParam = "tls=true"
 	}
+	params := "parseTime=true&allowNativePasswords=true&" + tlsParam
 
 	return fmt.Sprintf("%s@tcp(%s:%d)%s?%s",
 		userPart, cfg.ServerHost, cfg.ServerPort, dbPart, params)

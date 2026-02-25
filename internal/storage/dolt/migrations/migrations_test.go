@@ -81,7 +81,7 @@ func openTestDolt(t *testing.T) *sql.DB {
 	})
 
 	// Wait for server to be ready
-	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%d)/beads?allowCleartextPasswords=true&allowNativePasswords=true", port)
+	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%d)/beads?allowNativePasswords=true", port)
 	var db *sql.DB
 	var lastPingErr error
 	for i := 0; i < 50; i++ {

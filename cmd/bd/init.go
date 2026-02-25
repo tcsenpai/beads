@@ -1117,10 +1117,17 @@ func promptRemoteDoltConfig() (*remoteDoltConfig, error) {
 	}
 	cfg.User = user
 	
-	// Password
-	fmt.Print("MySQL password (optional): ")
-	password, _ := reader.ReadString('\n')
-	cfg.Password = strings.TrimSpace(password)
+	// Password (read without echo to avoid terminal exposure)
+	fmt.Print("MySQL password (optional, press Enter to skip): ")
+	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println() // newline after silent input
+	if err != nil {
+		// Fallback to echoed input if terminal is not available (e.g. piped input)
+		password, _ := reader.ReadString('\n')
+		cfg.Password = strings.TrimSpace(password)
+	} else {
+		cfg.Password = string(passwordBytes)
+	}
 	
 	fmt.Println()
 	fmt.Printf("Configuration:\n")
@@ -1160,11 +1167,11 @@ func saveRemoteConfig(beadsDir string, cfg *remoteDoltConfig) {
 		fmt.Printf("Remote server configuration saved to %s\n", filepath.Join(beadsDir, "metadata.json"))
 	}
 	
-	// If password was set, remind user about env var
+	// If password was set, remind user about env var (do not print the value)
 	if cfg.Password != "" {
 		fmt.Println()
 		fmt.Println("Note: Password not saved to config file (for security).")
-		fmt.Printf("Set it via environment variable: export BEADS_DOLT_PASSWORD=%s\n", cfg.Password)
+		fmt.Println("Set it via environment variable: export BEADS_DOLT_PASSWORD=<your-password>")
 	}
 }
 

@@ -564,7 +564,7 @@ func FlushWorkingSet(host string, port int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	dsn := fmt.Sprintf("root@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred", host, port)
+	dsn := fmt.Sprintf("root@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&tls=preferred", host, port)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return fmt.Errorf("flush: failed to open connection: %w", err)
@@ -780,7 +780,7 @@ func waitForReady(host string, port int, timeout time.Duration) error {
 
 	for time.Now().Before(deadline) {
 		// Try a full MySQL connection, not just TCP dial
-		dsn := fmt.Sprintf("root@tcp(%s)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred&timeout=2s", addr)
+		dsn := fmt.Sprintf("root@tcp(%s)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=2s", addr)
 		db, err := sql.Open("mysql", dsn)
 		if err == nil {
 			// Use a short context for the ping

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"errors"
@@ -632,9 +633,25 @@ After installation, you can run 'bd init' to set up your beads repository.`,
 		}
 
 		fmt.Println("Installing Dolt...")
-		fmt.Println("This will download and install Dolt from the official repository.")
 		fmt.Println()
-		
+		fmt.Println("WARNING: This will download and execute a shell script from the internet")
+		fmt.Println("using sudo/root privileges (Dolt's official install method).")
+		fmt.Println("No checksum or signature verification is performed.")
+		fmt.Println()
+		fmt.Println("Source: https://github.com/dolthub/dolt/releases/latest/download/install.sh")
+		fmt.Println()
+		fmt.Print("Proceed with installation? [y/N]: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+		if response != "y" && response != "yes" {
+			fmt.Println("Installation cancelled.")
+			fmt.Println("To install manually, see: https://docs.dolthub.com/introduction/installation")
+			return
+		}
+		fmt.Println()
+
 		if err := doltserver.InstallDolt(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -916,10 +933,10 @@ func testServerConnection(cfg *configfile.Config) bool {
 	// Build DSN with auth parameters matching the actual store connection
 	var dsn string
 	if password != "" {
-		dsn = fmt.Sprintf("%s:%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred&timeout=5s",
+		dsn = fmt.Sprintf("%s:%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
 			user, password, addr)
 	} else {
-		dsn = fmt.Sprintf("%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred&timeout=5s",
+		dsn = fmt.Sprintf("%s@tcp(%s)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
 			user, addr)
 	}
 
@@ -965,10 +982,10 @@ func openDoltServerConnection() (*sql.DB, func()) {
 
 	var connStr string
 	if password != "" {
-		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred&timeout=5s",
+		connStr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
 			user, password, host, port)
 	} else {
-		connStr = fmt.Sprintf("%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&allowCleartextPasswords=true&tls=preferred&timeout=5s",
+		connStr = fmt.Sprintf("%s@tcp(%s:%d)/?parseTime=true&allowNativePasswords=true&tls=preferred&timeout=5s",
 			user, host, port)
 	}
 
